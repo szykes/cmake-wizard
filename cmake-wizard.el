@@ -20,6 +20,8 @@
 
 ;;; Code:
 
+;;; Interface:
+
 (defgroup cmake-wizard nil
   "Use cmake and build targets easily."
   :group 'tools
@@ -36,19 +38,27 @@ The nil means it is in the project root."
   :group 'cmake-wizard
   :type 'directory)
 
-(defcustom cmake-wizard-cmake-build-directory-name "cmake-build"
-  "Specify name of directory where the generated files are."
+(defcustom cmake-wizard-cmake-build-directory-name "cmake-build/"
+  "Specify name of directory where the generated files are.
+Slash is required at the end."
   :group 'cmake-wiazrd
   :type 'string)
 
 (defcustom cmake-wizard-cmake-executable-path nil
-  "The path of cmake executable.  The nil means $PATH."
+  "The path of cmake executable.
+The nil means $PATH."
   :group 'cmake-wizard
   :type '(file :must-match t))
 
-(defun cmake-wizard-run-cmake ()
+(defun cmake-wizard-print-cmake-version ()
+  "Print cmake executable version."
+  (interactive)
+  (cmake-wizard--print-cmake-version))
+
+(defun cmake-wizard-generate-build-project-system ()
   "Run cmake."
-  (interactive))
+  (interactive)
+  (cmake-wizard--generate-project-build-system))
 
 (defun cmake-wizard-build-target ()
   "Run make."
@@ -62,6 +72,8 @@ The nil means it is in the project root."
 ;;   "Remove the existing build config from the project."
 ;;   (interactive))
 
+;;; Core:
+
 (require 'projectile)
 
 (defconst cmake-wizard--cmake-executable-name "cmake")
@@ -70,7 +82,7 @@ The nil means it is in the project root."
 
 (defconst cmake-wizard--buffer-name " *cmake-wizard log*")
 
-(defconst cmake-wizard--cmake-file "CMakeFile.txt")
+(defconst cmake-wizard--cmake-lists-file "CMakeLists.txt")
 
 (defun cmake-wizard--do-with-buffer (do)
   "Switch to buffer, do the DO then switch back."
@@ -91,7 +103,7 @@ The nil means it is in the project root."
 (defun cmake-wizard--print-message-and-buffer (string &rest objects)
   "Print STRING and OBJECTS in *Messgae* and own buffer."
   (let ((built-string (apply 'cmake-wizard--build-message string objects)))
-    (message "%s" built-string)
+    (apply 'message string objects)
     (cmake-wizard--do-with-buffer (lambda () (insert built-string "\n")))))
 
 (defun cmake-wizard--print-buffer (string &rest objects)
@@ -102,7 +114,7 @@ The nil means it is in the project root."
 (defun cmake-wizard--throw-error (string &rest objects)
   "Throw an error with STRING and OBJECTS."
   (apply 'cmake-wizard--print-buffer string objects)
-  (error "%s" (apply 'error string objects)))
+  (apply 'error string objects))
 
 (defun cmake-wizard--generate-buffer (buffer-name)
   "Generate buffer with BUFFER-NAME."
@@ -122,19 +134,30 @@ The nil means it is in the project root."
   "Return with the project root directory based on the current position."
   (let ((root (projectile-project-root)))
     (when (not root)
-      (cmake-wizard--throw-error "Project has not found based on buffer %s (%s)" (buffer-name) (buffer-file-name)))
-    (cmake-wizard--print-buffer "Project has found with name %s (%s)" (cmake-wizard--get-project-name) root)
+      (cmake-wizard--throw-error "Project has not found based on buffer %s (%s)"
+				 (buffer-name)
+				 (buffer-file-name)))
+    (cmake-wizard--print-buffer "Project has found with name %s (%s)"
+				(cmake-wizard--get-project-name)
+				root)
     root))
 
 (defun cmake-wizard--test-whether-cmake-project ()
-   "Test wheter the current prject is cmake project."
-  (let ((path (concat (cmake-wizard--get-project-root-dir) cmake-wizard--cmake-file)))
+  "Test wheter the current prject is cmake project."
+  (let ((path (concat
+	       (cmake-wizard--get-project-root-dir)
+	       cmake-wizard--cmake-lists-file)))
     (when (not (file-exists-p path))
-      (cmake-wizard--throw-error "The project %s (%s) is not cmake project" (cmake-wizard--get-project-name) (cmake-wizard--get-project-root-dir)))))
+      (cmake-wizard--throw-error "The project %s (%s) is not cmake project"
+				 (cmake-wizard--get-project-name)
+				 (cmake-wizard--get-project-root-dir)))))
 
 (defun cmake-wizard--get-build-root-path ()
   "Return with the full path of the build root."
-  (concat (or cmake-wizard-cmake-build-directory-path (cmake-wizard--get-project-root-dir)) cmake-wizard-cmake-build-directory-name))
+  (concat (or
+	   cmake-wizard-cmake-build-directory-path
+	   (cmake-wizard--get-project-root-dir))
+	  cmake-wizard-cmake-build-directory-name))
 
 (defun cmake-wizard--get-build-project-path ()
   "Return with the full path of the project specific build directory."
@@ -161,8 +184,17 @@ The nil means it is in the project root."
 			       program
 			       (get-process process-name)
 			       (process-id (get-process process-name))))
-  (cmake-wizard--print-buffer (concat "Run: " default-directory "$ " program " " (mapconcat 'identity program-args " ")))
-  (apply 'start-process process-name (cmake-wizard--get-buffer) program program-args))
+  (cmake-wizard--print-buffer (concat
+			       "Run: "
+			       program
+			       " "
+			       (mapconcat 'identity program-args " ")))
+  (apply
+   'start-process
+   process-name
+   (cmake-wizard--get-buffer)
+   program
+   program-args))
 
 (defun cmake-wizard--get-cmake-executable ()
   "Return with cmake executable."
@@ -170,23 +202,59 @@ The nil means it is in the project root."
 
 (defun cmake-wizard--run-cmake (callback &rest program-args)
   "Run cmake with PROGRAM-ARGS then register CALLBACK."
-  (let ((default-directory (cmake-wizard--get-build-project-path)))
-    (apply 'cmake-wizard--run-program
-	   cmake-wizard--process-name
-	   (cmake-wizard--get-cmake-executable)
-	   program-args)
-    (cmake-wizard--register-callback cmake-wizard--process-name callback)))
+  (apply 'cmake-wizard--run-program
+	 cmake-wizard--process-name
+	 (cmake-wizard--get-cmake-executable)
+	 program-args)
+  (cmake-wizard--register-callback cmake-wizard--process-name callback))
+
+(defun cmake-wizard--filter (proc string)
+  "PROC and STRING."
+  )
 
 (defun cmake-wizard--print-cmake-version ()
-  "Print cmake version into buffer."
-  (cmake-wizard--run-program cmake-wizard--process-name (cmake-wizard--get-cmake-executable) "-version"))
+  "Print cmake version into buffer.
+cmake --version"
+  (cmake-wizard--run-cmake nil "-version")
+  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter))
 
-(defun cmake-wizard-proc ()
-  "."
-  (interactive)
-  (cmake-wizard--print-cmake-version)
-  (cmake-wizard--run-cmake nil (cmake-wizard--get-project-root-dir))
-  )
+(defun cmake-wizard--generate-project-build-system (&rest options)
+  "Run cmake on project to generate the build system with OPTIONS.
+cmake <OPTIONS> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S <project path> -B <build path>"
+  (cmake-wizard--test-whether-cmake-project)
+  (cmake-wizard--run-cmake
+   (lambda (process event)
+     (let ((status (process-exit-status process)))
+     (when (not (= 0 status))
+       (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
+				  status
+				  cmake-wizard--buffer-name))
+     (cmake-wizard--print-message-and-buffer "Success")))
+   (mapconcat 'identity options " ")
+   "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+   "-S"
+   (cmake-wizard--get-project-root-dir)
+   "-B"
+   (cmake-wizard--get-build-project-path)))
+
+(defun cmake-wizard--build-target (target &rest options)
+  "Run cmake to build TARGET with build OPTIONS for native tool.
+cmake --build <build path> --target <TARGET> -- <OPTIONS>"
+  (cmake-wizard--test-whether-cmake-project)
+  (apply 'cmake-wizard--run-cmake
+   (lambda (process event)
+     (let ((status (process-exit-status process)))
+     (when (not (= 0 status))
+       (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
+				  status
+				  cmake-wizard--buffer-name))
+     (cmake-wizard--print-message-and-buffer "Success")))
+   "--build"
+   (cmake-wizard--get-build-project-path)
+   "--target"
+   target
+   "--"
+   options))
 
 (provide 'cmake-wizard)
 ;;; cmake-wizard.el ends here
