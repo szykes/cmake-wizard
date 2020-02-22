@@ -3,16 +3,12 @@
 ;;; Commentary:
 
 ;; General requirements:
-;; - The default run command shall be just: cmake [project path]
-;; - The cmake output shall have a separated buffer
-;; - The cmake shall run in /tmp/cmake-wizard/[project-hash]
 ;; - More build config shall be added easily (eg: -DFLAVOR=release [compiler config file])
 ;; - The build config shall be changeable by using its name
 ;; - The pre-build and post-build tasks shall be added (how to set variables? etc., post-build like running unit test)
 ;; - The build config shall be stored within the project as eg: .cmake-wizard-config
 ;; - The building shall be done by the compile function (the cmake-wizard shall give a list of targets)
 ;; - The gtest shall be supported (is it really needed?)
-;; - The projectile shall be supported
 ;; - The lsp-mode shall be supported
 ;; - The helm shall be supported
 ;; - The ivy shall be supported
@@ -62,7 +58,8 @@ The nil means $PATH."
 
 (defun cmake-wizard-build-target ()
   "Run make."
-  (interactive))
+  (interactive)
+  (cmake-wizard--build-target "all"))
 
 ;; (defun cmake-wizard-add-build-config ()
 ;;   "Add new build config to the project."
@@ -80,7 +77,7 @@ The nil means $PATH."
 
 (defconst cmake-wizard--process-name "cmake")
 
-(defconst cmake-wizard--buffer-name " *cmake-wizard log*")
+(defconst cmake-wizard--buffer-name "*cmake-wizard log*")
 
 (defconst cmake-wizard--cmake-lists-file "CMakeLists.txt")
 
@@ -208,15 +205,31 @@ The nil means $PATH."
 	 program-args)
   (cmake-wizard--register-callback cmake-wizard--process-name callback))
 
-(defun cmake-wizard--filter (proc string)
-  "PROC and STRING."
-  )
+(defun cmake-wizard--send-output-to-buffer (proc string)
+  "The output STRING of PROC is printed on the buffer of PROC."
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (let ((moving (= (point) (process-mark proc))))
+	(save-excursion
+	  (goto-char (process-mark proc))
+	  (cmake-wizard--do-with-buffer (lambda () (insert string)))
+	  (set-marker (process-mark proc) (point)))
+	(when moving
+	  (goto-char (process-mark proc)))))))
+
+(defun cmake-wizard--filter-cmake-version (proc string)
+  "Print cmake version of PROC based on STRING."
+  (string-match "\\([0-9]+.[0-9.]+\\)" string)
+  (let ((version (match-string 1 string)))
+    (when (version)
+      (cmake-wizard--print-message-and-buffer "cmake version: %s" version)))
+  (cmake-wizard--send-output-to-buffer proc string))
 
 (defun cmake-wizard--print-cmake-version ()
-  "Print cmake version into buffer.
+  "Print cmake version.
 cmake --version"
   (cmake-wizard--run-cmake nil "-version")
-  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter))
+  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-cmake-version))
 
 (defun cmake-wizard--generate-project-build-system (&rest options)
   "Run cmake on project to generate the build system with OPTIONS.
