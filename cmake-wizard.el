@@ -61,6 +61,11 @@ The nil means $PATH."
   (interactive)
   (cmake-wizard--build-target "all"))
 
+(defun cmake-wizard-temp ()
+  "Asd."
+  (interactive)
+  (cmake-wizard--get-build-targets))
+
 ;; (defun cmake-wizard-add-build-config ()
 ;;   "Add new build config to the project."
 ;;   (interactive))
@@ -80,6 +85,17 @@ The nil means $PATH."
 (defconst cmake-wizard--buffer-name "*cmake-wizard log*")
 
 (defconst cmake-wizard--cmake-lists-file "CMakeLists.txt")
+
+(defun cmake-wizard--regexp-list (regexp string)
+  "Return a list of all REGEXP match in STRING."
+  ;; source: http://emacs.stackexchange.com/questions/7148/get-all-regexp-matches-in-buffer-as-a-list
+  (let ((pos 0)
+	(matches ()))
+    (while (string-match regexp string pos)
+      (push (match-string 1 string) matches)
+      (setq pos (match-end 0)))
+    (setq matches (reverse matches))
+    matches))
 
 (defun cmake-wizard--do-with-buffer (do)
   "Switch to buffer, do the DO then switch back."
@@ -219,7 +235,7 @@ The nil means $PATH."
 
 (defun cmake-wizard--filter-cmake-version (proc string)
   "Print cmake version of PROC based on STRING."
-  (string-match "\\([0-9]+.[0-9.]+\\)" string)
+  (string-match "\\([0-9]+.[0-9.]+[a-zA-Z0-9\\-_.]*\\)" string)
   (let ((version (match-string 1 string)))
     (when (version)
       (cmake-wizard--print-message-and-buffer "cmake version: %s" version)))
@@ -249,6 +265,31 @@ cmake <OPTIONS> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S <project path> -B <build p
    (cmake-wizard--get-project-root-dir)
    "-B"
    (cmake-wizard--get-build-project-path)))
+
+(defun cmake-wizard--filter-get-build-targets (proc string)
+  "Store the build targets from STRING of PROC."
+  ;; [!-~] means all printable character except the space
+  (let ((targets (cmake-wizard--regexp-list "\\.\\.\\. \\([!-~]+\\)" string)))
+    (cmake-wizard--print-buffer "Build targets: \n%s\nend of list" (mapconcat 'identity targets "\n")))
+  (cmake-wizard--send-output-to-buffer proc string))
+
+(defun cmake-wizard--get-build-targets ()
+  "Get and store the build targets of the current project.
+cmake --build <build path> --target help"
+  (cmake-wizard--test-whether-cmake-project)
+  (cmake-wizard--run-cmake
+   (lambda (process event)
+     (let ((status (process-exit-status process)))
+     (when (not (= 0 status))
+       (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
+				  status
+				  cmake-wizard--buffer-name))
+     (cmake-wizard--print-message-and-buffer "Success")))
+   "--build"
+   (cmake-wizard--get-build-project-path)
+   "--target"
+   "help")
+  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-get-build-targets))
 
 (defun cmake-wizard--build-target (target &rest options)
   "Run cmake to build TARGET with build OPTIONS for native tool.
