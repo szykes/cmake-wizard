@@ -78,6 +78,12 @@ The nil means $PATH."
 
 (require 'projectile)
 
+(cl-defstruct cmake-wizard--session-type
+  project-path
+  project-name
+  build-targets
+  execution-list)
+
 (defconst cmake-wizard--cmake-executable-name "cmake")
 
 (defconst cmake-wizard--process-name "cmake")
@@ -85,6 +91,10 @@ The nil means $PATH."
 (defconst cmake-wizard--buffer-name "*cmake-wizard log*")
 
 (defconst cmake-wizard--cmake-lists-file "CMakeLists.txt")
+
+(defvar cmake-wizard--session (make-cmake-wizard--session-type)
+  "Contains the project specific data.
+This shall be always updated!")
 
 (defun cmake-wizard--regexp-list (regexp string)
   "Return a list of all REGEXP match in STRING."
@@ -233,12 +243,36 @@ The nil means $PATH."
 	(when moving
 	  (goto-char (process-mark proc)))))))
 
+(defun cmake-wizard--request-build-targets-if-needs (string)
+  "Request to get build targets based on the output (STRING) of cmake."
+  (when (string-match "Generating done" string)
+    (setf (cmake-wizard--session-type-request-for-build-targets cmake-wizard--session) t)))
+
 (defun cmake-wizard--filter-cmake-version (proc string)
   "Print cmake version of PROC based on STRING."
   (string-match "\\([0-9]+.[0-9.]+[a-zA-Z0-9\\-_.]*\\)" string)
   (let ((version (match-string 1 string)))
     (when (version)
       (cmake-wizard--print-message-and-buffer "cmake version: %s" version)))
+  (cmake-wizard--send-output-to-buffer proc string))
+
+(defun cmake-wizard--filter-generate-project-build-system (proc string)
+  "Filter the output (STRING) of cmake (PROC)."
+  (cmake-wizard--request-build-targets-if-needs string)
+  (cmake-wizard--send-output-to-buffer proc string))
+
+(defun cmake-wizard--filter-get-build-targets (proc string)
+  "Store the build targets from STRING of PROC."
+  ;; [!-~] means all printable character except the space
+  (let ((targets (cmake-wizard--regexp-list "\\.\\.\\. \\([!-~]+\\)" string)))
+    (setf (cmake-wizard--session-type-build-targets cmake-wizard--session) targets)
+    (setf (cmake-wizard--session-type-request-for-build-targets cmake-wizard--session) nil)
+    (cmake-wizard--print-buffer "Build targets: \n%s\nend of list" (mapconcat 'identity targets "\n")))
+  (cmake-wizard--send-output-to-buffer proc string))
+
+(defun cmake-wizard--filter-build-target (proc string)
+  "Filter the output (STRING) of cmake (PROC)."
+  (cmake-wizard--request-build-targets-if-needs string)
   (cmake-wizard--send-output-to-buffer proc string))
 
 (defun cmake-wizard--print-cmake-version ()
@@ -264,14 +298,8 @@ cmake <OPTIONS> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S <project path> -B <build p
    "-S"
    (cmake-wizard--get-project-root-dir)
    "-B"
-   (cmake-wizard--get-build-project-path)))
-
-(defun cmake-wizard--filter-get-build-targets (proc string)
-  "Store the build targets from STRING of PROC."
-  ;; [!-~] means all printable character except the space
-  (let ((targets (cmake-wizard--regexp-list "\\.\\.\\. \\([!-~]+\\)" string)))
-    (cmake-wizard--print-buffer "Build targets: \n%s\nend of list" (mapconcat 'identity targets "\n")))
-  (cmake-wizard--send-output-to-buffer proc string))
+   (cmake-wizard--get-build-project-path))
+  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-generate-project-build-system))
 
 (defun cmake-wizard--get-build-targets ()
   "Get and store the build targets of the current project.
@@ -308,7 +336,8 @@ cmake --build <build path> --target <TARGET> -- <OPTIONS>"
    "--target"
    target
    "--"
-   options))
+   options)
+  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-build-target))
 
 (provide 'cmake-wizard)
 ;;; cmake-wizard.el ends here
