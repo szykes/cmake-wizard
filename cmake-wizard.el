@@ -149,14 +149,14 @@ This shall be always updated!")
 
 (defun cmake-wizard--get-buffer ()
   "Get buffer and generate it, if it does not exist."
-  (when (not (get-buffer cmake-wizard--buffer-name))
+  (unless (get-buffer cmake-wizard--buffer-name)
     (cmake-wizard--generate-buffer cmake-wizard--buffer-name))
   (get-buffer cmake-wizard--buffer-name))
 
 (defun cmake-wizard--get-project-root-dir ()
   "Return with the project root directory based on the current position."
   (let ((root (projectile-project-root)))
-    (when (not root)
+    (unless root
       (cmake-wizard--throw-error "Project has not found based on buffer %s (%s)"
 				 (buffer-name)
 				 (buffer-file-name)))
@@ -170,7 +170,7 @@ This shall be always updated!")
   (let ((path (concat
 	       (cmake-wizard--get-project-root-dir)
 	       cmake-wizard--cmake-lists-file)))
-    (when (not (file-exists-p path))
+    (unless (file-exists-p path)
       (cmake-wizard--throw-error "The project %s (%s) is not cmake project"
 				 (cmake-wizard--get-project-name)
 				 (cmake-wizard--get-project-root-dir)))))
@@ -188,7 +188,7 @@ This shall be always updated!")
 	 (directory (replace-regexp-in-string "/" "_" project-path))
 	 (root-path (cmake-wizard--get-build-root-path))
 	 (build-path (concat root-path directory)))
-    (when (not (file-directory-p build-path))
+    (unless (file-directory-p build-path)
       (make-directory build-path root-path))
     build-path))
 
@@ -279,7 +279,9 @@ This shall be always updated!")
   "Print cmake version.
 cmake --version"
   (cmake-wizard--run-cmake nil "-version")
-  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-cmake-version))
+  (set-process-filter
+   (get-process cmake-wizard--process-name)
+   'cmake-wizard--filter-cmake-version))
 
 (defun cmake-wizard--generate-project-build-system (&rest options)
   "Run cmake on project to generate the build system with OPTIONS.
@@ -288,18 +290,21 @@ cmake <OPTIONS> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S <project path> -B <build p
   (cmake-wizard--run-cmake
    (lambda (process event)
      (let ((status (process-exit-status process)))
-     (when (not (= 0 status))
+     (unless (= 0 status)
        (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
 				  status
 				  cmake-wizard--buffer-name))
-     (cmake-wizard--print-message-and-buffer "Success")))
+     (cmake-wizard--print-message-and-buffer "Success")
+     (cmake-wizard--perform-execution)))
    (mapconcat 'identity options " ")
    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
    "-S"
    (cmake-wizard--get-project-root-dir)
    "-B"
    (cmake-wizard--get-build-project-path))
-  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-generate-project-build-system))
+  (set-process-filter
+   (get-process cmake-wizard--process-name)
+   'cmake-wizard--filter-generate-project-build-system))
 
 (defun cmake-wizard--get-build-targets ()
   "Get and store the build targets of the current project.
@@ -308,16 +313,19 @@ cmake --build <build path> --target help"
   (cmake-wizard--run-cmake
    (lambda (process event)
      (let ((status (process-exit-status process)))
-     (when (not (= 0 status))
+     (unless (= 0 status)
        (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
 				  status
 				  cmake-wizard--buffer-name))
-     (cmake-wizard--print-message-and-buffer "Success")))
+     (cmake-wizard--print-message-and-buffer "Success")
+     (cmake-wizard--perform-execution)))
    "--build"
    (cmake-wizard--get-build-project-path)
    "--target"
    "help")
-  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-get-build-targets))
+  (set-process-filter
+   (get-process cmake-wizard--process-name)
+   'cmake-wizard--filter-get-build-targets))
 
 (defun cmake-wizard--build-target (target &rest options)
   "Run cmake to build TARGET with build OPTIONS for native tool.
@@ -326,18 +334,21 @@ cmake --build <build path> --target <TARGET> -- <OPTIONS>"
   (apply 'cmake-wizard--run-cmake
    (lambda (process event)
      (let ((status (process-exit-status process)))
-     (when (not (= 0 status))
+     (unless (= 0 status)
        (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
 				  status
 				  cmake-wizard--buffer-name))
-     (cmake-wizard--print-message-and-buffer "Success")))
+     (cmake-wizard--print-message-and-buffer "Success")
+     (cmake-wizard--perform-execution)))
    "--build"
    (cmake-wizard--get-build-project-path)
    "--target"
    target
    "--"
    options)
-  (set-process-filter (get-process cmake-wizard--process-name) 'cmake-wizard--filter-build-target))
+  (set-process-filter
+   (get-process cmake-wizard--process-name)
+   'cmake-wizard--filter-build-target))
 
 (provide 'cmake-wizard)
 ;;; cmake-wizard.el ends here
