@@ -81,8 +81,7 @@ The nil means $PATH."
 (cl-defstruct cmake-wizard--session-type
   project-path
   project-name
-  build-targets
-  execution-list)
+  build-targets)
 
 (defconst cmake-wizard--cmake-executable-name "cmake")
 
@@ -91,6 +90,8 @@ The nil means $PATH."
 (defconst cmake-wizard--buffer-name "*cmake-wizard log*")
 
 (defconst cmake-wizard--cmake-lists-file "CMakeLists.txt")
+
+(defvar cmake-wizard--execution-list nil)
 
 (defvar cmake-wizard--session (make-cmake-wizard--session-type)
   "Contains the project specific data.
@@ -152,6 +153,18 @@ This shall be always updated!")
   (unless (get-buffer cmake-wizard--buffer-name)
     (cmake-wizard--generate-buffer cmake-wizard--buffer-name))
   (get-buffer cmake-wizard--buffer-name))
+
+(defun cmake-wizard--push-back-execution (exec)
+  "Store in execution list the EXEC.
+The EXEC shall be a callable object like lambda function."
+  (push exec cmake-wizard--execution-list))
+
+(defun cmake-wizard--perform-execution ()
+  "Restore from execution list and execute it."
+  (when cmake-wizard--execution-list
+    (let ((exec (car (last cmake-wizard--execution-list))))
+      (funcall exec)
+      (setq cmake-wizard--execution-list (butlast cmake-wizard--execution-list)))))
 
 (defun cmake-wizard--get-project-root-dir ()
   "Return with the project root directory based on the current position."
@@ -246,7 +259,7 @@ This shall be always updated!")
 (defun cmake-wizard--request-build-targets-if-needs (string)
   "Request to get build targets based on the output (STRING) of cmake."
   (when (string-match "Generating done" string)
-    (setf (cmake-wizard--session-type-request-for-build-targets cmake-wizard--session) t)))
+    (cmake-wizard--push-back-execution (lambda () (cmake-wizard--get-build-targets)))))
 
 (defun cmake-wizard--filter-cmake-version (proc string)
   "Print cmake version of PROC based on STRING."
@@ -265,9 +278,7 @@ This shall be always updated!")
   "Store the build targets from STRING of PROC."
   ;; [!-~] means all printable character except the space
   (let ((targets (cmake-wizard--regexp-list "\\.\\.\\. \\([!-~]+\\)" string)))
-    (setf (cmake-wizard--session-type-build-targets cmake-wizard--session) targets)
-    (setf (cmake-wizard--session-type-request-for-build-targets cmake-wizard--session) nil)
-    (cmake-wizard--print-buffer "Build targets: \n%s\nend of list" (mapconcat 'identity targets "\n")))
+    (setf (cmake-wizard--session-type-build-targets cmake-wizard--session) targets))
   (cmake-wizard--send-output-to-buffer proc string))
 
 (defun cmake-wizard--filter-build-target (proc string)
@@ -294,7 +305,7 @@ cmake <OPTIONS> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S <project path> -B <build p
        (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
 				  status
 				  cmake-wizard--buffer-name))
-     (cmake-wizard--print-message-and-buffer "Success")
+     (cmake-wizard--print-message-and-buffer "Success - generate")
      (cmake-wizard--perform-execution)))
    (mapconcat 'identity options " ")
    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
@@ -317,7 +328,7 @@ cmake --build <build path> --target help"
        (cmake-wizard--throw-error "The cmake has failed (exit code: %d), see the %s"
 				  status
 				  cmake-wizard--buffer-name))
-     (cmake-wizard--print-message-and-buffer "Success")
+     (cmake-wizard--print-message-and-buffer "Success - list targets")
      (cmake-wizard--perform-execution)))
    "--build"
    (cmake-wizard--get-build-project-path)
