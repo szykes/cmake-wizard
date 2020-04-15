@@ -51,13 +51,13 @@ The nil means $PATH."
   (interactive)
   (cmake-wizard--print-cmake-version))
 
-(defun cmake-wizard-generate-build-project-system ()
-  "Run cmake."
+(defun cmake-wizard-generate-build-projectsystem ()
+  "Generate the Build Projectsystem."
   (interactive)
-  (cmake-wizard--generate-project-build-system))
+  (cmake-wizard--generate-project-buildsystem))
 
-(defun cmake-wizard-build-target ()
-  "Run make."
+(defun cmake-wizard-build-all-target ()
+  "Build all targets with cmake."
   (interactive)
   (cmake-wizard--build-target "all"))
 
@@ -269,7 +269,7 @@ The EXEC shall be a callable object like lambda function."
       (cmake-wizard--print-message-and-buffer "cmake version: %s" version)))
   (cmake-wizard--send-output-to-buffer proc string))
 
-(defun cmake-wizard--filter-generate-project-build-system (proc string)
+(defun cmake-wizard--filter-generate-project-buildsystem (proc string)
   "Filter the output (STRING) of cmake (PROC)."
   (cmake-wizard--request-build-targets-if-needs string)
   (cmake-wizard--send-output-to-buffer proc string))
@@ -294,8 +294,8 @@ cmake --version"
    (get-process cmake-wizard--process-name)
    'cmake-wizard--filter-cmake-version))
 
-(defun cmake-wizard--generate-project-build-system (&rest options)
-  "Run cmake on project to generate the build system with OPTIONS.
+(defun cmake-wizard--generate-project-buildsystem (&rest options)
+  "Run cmake on project to generate the Project Buildsystem with OPTIONS.
 cmake <OPTIONS> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S <project path> -B <build path>"
   (cmake-wizard--test-whether-cmake-project)
   (cmake-wizard--run-cmake
@@ -315,7 +315,7 @@ cmake <OPTIONS> -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -S <project path> -B <build p
    (cmake-wizard--get-build-project-path))
   (set-process-filter
    (get-process cmake-wizard--process-name)
-   'cmake-wizard--filter-generate-project-build-system))
+   'cmake-wizard--filter-generate-project-buildsystem))
 
 (defun cmake-wizard--get-build-targets ()
   "Get and store the build targets of the current project.
