@@ -46,10 +46,30 @@ The nil means $PATH."
   :group 'cmake-wizard
   :type '(file :must-match t))
 
+(defcustom cmake-wizard-cmake-wizard-setup-filename ".cmake-wizard"
+  "The filename of the cmake wizard setup file.
+This file is located in the specific project root.
+The setup means a specific combination of compiler, architecture, flavor, etc."
+  :group 'cmake-wizard
+  :type 'filename)
+
 (defun cmake-wizard-print-cmake-version ()
   "Print cmake executable version."
   (interactive)
   (cmake-wizard--print-cmake-version))
+
+(defun cmake-wizard-show-setup ()
+  "Print all setup of the specific project."
+  )
+
+(defun cmake-wizard-add-setup ()
+  "Add a setup for the current project."
+  (interactive)
+  (cmake-wizard--add-setup))
+
+(defun cmake-wizard-remove-setup ()
+  "Remove a setup from the specific project."
+  )
 
 (defun cmake-wizard-generate-build-projectsystem ()
   "Generate the Build Projectsystem."
@@ -81,7 +101,8 @@ The nil means $PATH."
 (cl-defstruct cmake-wizard--session-type
   project-path
   project-name
-  build-targets)
+  build-targets
+  setups)
 
 (defconst cmake-wizard--cmake-executable-name "cmake")
 
@@ -293,6 +314,11 @@ cmake --version"
   (set-process-filter
    (get-process cmake-wizard--process-name)
    'cmake-wizard--filter-cmake-version))
+
+(defun cmake-wizard--add-setup ()
+  "Add a setup for the current project."
+  ()
+  (cmake-wizard--print-message-and-buffer "Setup name: %s, specs: %s" (read-string "Enter setup name:") (read-string "specs:")))
 
 (defun cmake-wizard--generate-project-buildsystem (&rest options)
   "Run cmake on project to generate the Project Buildsystem with OPTIONS.
