@@ -1,1 +1,5 @@
 *~
+*.elc
+/build/
+/test/fixtures/*/build/
+/test/fixtures/*/compile_commands.json
